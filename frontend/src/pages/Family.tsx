@@ -240,7 +240,9 @@ export const Family: React.FC = () => {
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 ) : (
-                  <Lock className="w-3.5 h-3.5 text-slate-300" title="System Preset" />
+                  <span title="System Preset">
+                    <Lock className="w-3.5 h-3.5 text-slate-300" />
+                  </span>
                 )}
               </div>
             ))}
