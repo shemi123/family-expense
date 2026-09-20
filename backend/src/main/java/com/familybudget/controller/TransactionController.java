@@ -1,6 +1,7 @@
 package com.familybudget.controller;
 
 import com.familybudget.dto.common.PagedResponse;
+import com.familybudget.dto.transaction.BulkTransactionRequest;
 import com.familybudget.dto.transaction.TransactionFilterParams;
 import com.familybudget.dto.transaction.TransactionRequest;
 import com.familybudget.dto.transaction.TransactionResponse;
@@ -18,6 +19,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -50,6 +52,16 @@ public class TransactionController {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(transactionService.createTransaction(request, currentUser));
     }
+
+    @PostMapping("/bulk")
+    @Operation(summary = "Create multiple transactions in a single batch and update account balances")
+    public ResponseEntity<List<TransactionResponse>> createBulkTransactions(
+            @Valid @RequestBody BulkTransactionRequest request,
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(transactionService.createBulkTransactions(request, currentUser));
+    }
+
 
     @PutMapping("/{id}")
     @Operation(summary = "Update an existing transaction and readjust balances")

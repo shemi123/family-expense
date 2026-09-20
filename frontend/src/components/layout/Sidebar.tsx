@@ -8,6 +8,7 @@ import {
   Repeat,
   Settings,
   Users,
+  Calculator,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/useAuthStore';
 
@@ -22,11 +23,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const navItems = [
     { to: '/', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/transactions', label: 'Transactions', icon: Receipt },
+    { to: '/expense-calculation', label: 'Expense Calculator', icon: Calculator },
     { to: '/budgets', label: 'Budgets', icon: PiggyBank },
     { to: '/accounts', label: 'Accounts', icon: WalletCards },
     { to: '/recurring', label: 'Recurring', icon: Repeat },
     { to: '/family', label: 'Family Members', icon: Users },
   ];
+
 
   return (
     <>

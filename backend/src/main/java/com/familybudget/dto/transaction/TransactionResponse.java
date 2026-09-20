@@ -33,6 +33,7 @@ public class TransactionResponse {
     private String receiptUrl;
     private Boolean isRecurring;
     private UUID recurringTransactionId;
+    private UUID batchId;
     private OffsetDateTime createdAt;
 
     public static TransactionResponse from(Transaction t) {
@@ -53,6 +54,7 @@ public class TransactionResponse {
                 .receiptUrl(t.getReceiptUrl())
                 .isRecurring(t.getIsRecurring())
                 .recurringTransactionId(t.getRecurringTransaction() != null ? t.getRecurringTransaction().getId() : null)
+                .batchId(t.getBatchId())
                 .createdAt(t.getCreatedAt())
                 .build();
     }

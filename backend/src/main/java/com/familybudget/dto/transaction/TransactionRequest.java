@@ -34,6 +34,8 @@ public class TransactionRequest {
 
     private Boolean isRecurring = false;
 
+    private UUID batchId;
+
     // Optional recurring parameters if creating recurring schedule simultaneously
     private Frequency frequency;
     private Integer intervalCount = 1;

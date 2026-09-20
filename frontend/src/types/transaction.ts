@@ -17,6 +17,7 @@ export interface Transaction {
   receiptUrl?: string;
   isRecurring: boolean;
   recurringTransactionId?: string;
+  batchId?: string;
   createdAt: string;
 }
 
@@ -32,6 +33,11 @@ export interface TransactionPayload {
   frequency?: 'DAILY' | 'WEEKLY' | 'BI_WEEKLY' | 'MONTHLY' | 'YEARLY';
   intervalCount?: number;
   recurringEndDate?: string;
+  batchId?: string;
+}
+
+export interface BulkTransactionPayload {
+  transactions: TransactionPayload[];
 }
 
 export interface TransactionFilters {

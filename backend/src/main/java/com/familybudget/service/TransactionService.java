@@ -4,6 +4,7 @@ import com.familybudget.domain.entity.*;
 import com.familybudget.domain.enums.TransactionType;
 import com.familybudget.dto.common.PagedResponse;
 import com.familybudget.dto.recurring.RecurringTransactionRequest;
+import com.familybudget.dto.transaction.BulkTransactionRequest;
 import com.familybudget.dto.transaction.TransactionFilterParams;
 import com.familybudget.dto.transaction.TransactionRequest;
 import com.familybudget.dto.transaction.TransactionResponse;
@@ -22,6 +23,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -73,6 +76,7 @@ public class TransactionService {
                 .notes(request.getNotes())
                 .receiptUrl(request.getReceiptUrl())
                 .isRecurring(Boolean.TRUE.equals(request.getIsRecurring()))
+                .batchId(request.getBatchId())
                 .build();
 
         // If recurrence is requested and frequency provided, create schedule
@@ -104,6 +108,22 @@ public class TransactionService {
 
         return TransactionResponse.from(transaction);
     }
+
+    @Transactional
+    public List<TransactionResponse> createBulkTransactions(BulkTransactionRequest bulkRequest, UserPrincipal currentUser) {
+        UUID sharedBatchId = UUID.randomUUID();
+        List<TransactionResponse> responses = new ArrayList<>();
+        if (bulkRequest.getTransactions() != null) {
+            for (TransactionRequest request : bulkRequest.getTransactions()) {
+                if (request.getBatchId() == null) {
+                    request.setBatchId(sharedBatchId);
+                }
+                responses.add(createTransaction(request, currentUser));
+            }
+        }
+        return responses;
+    }
+
 
     @Transactional
     public TransactionResponse updateTransaction(UUID id, TransactionRequest request) {

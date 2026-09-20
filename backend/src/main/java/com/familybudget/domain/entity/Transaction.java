@@ -62,6 +62,9 @@ public class Transaction {
     @Builder.Default
     private Boolean isRecurring = false;
 
+    @Column(name = "batch_id")
+    private UUID batchId;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 

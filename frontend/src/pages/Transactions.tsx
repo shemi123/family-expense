@@ -22,6 +22,9 @@ import {
   Loader2,
   FileText,
   ExternalLink,
+  Layers,
+  Copy,
+  RotateCcw,
 } from 'lucide-react';
 
 export const Transactions: React.FC = () => {
@@ -105,6 +108,23 @@ export const Transactions: React.FC = () => {
     },
   });
 
+  // Multi-Entry State
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+  const [defaultDate, setDefaultDate] = useState(new Date().toISOString().split('T')[0]);
+  const [defaultAccountId, setDefaultAccountId] = useState('');
+  const [defaultType, setDefaultType] = useState<TransactionType>('EXPENSE');
+  const [bulkRows, setBulkRows] = useState<
+    {
+      id: string;
+      type: TransactionType;
+      date: string;
+      accountId: string;
+      categoryId: string;
+      amount: string;
+      notes: string;
+    }[]
+  >([]);
+
   const deleteMutation = useMutation({
     mutationFn: transactionApi.deleteTransaction,
     onSuccess: () => {
@@ -114,6 +134,162 @@ export const Transactions: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['budgets'] });
     },
   });
+
+  const bulkCreateMutation = useMutation({
+    mutationFn: (payloads: TransactionPayload[]) => transactionApi.createBulkTransactions(payloads),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['budgets'] });
+      closeBulkModal();
+    },
+  });
+
+  const openBulkModal = () => {
+    const initialAccount = accounts && accounts.length > 0 ? accounts[0].id : '';
+    const initialDate = new Date().toISOString().split('T')[0];
+    const initialType: TransactionType = 'EXPENSE';
+
+    setDefaultAccountId(initialAccount);
+    setDefaultDate(initialDate);
+    setDefaultType(initialType);
+
+    const getFirstCategory = (t: TransactionType) => {
+      const match = categories?.find((c) => c.type === t);
+      return match ? match.id : '';
+    };
+
+    const initialRows = Array.from({ length: 3 }).map((_, idx) => ({
+      id: `row-${Date.now()}-${idx}`,
+      type: initialType,
+      date: initialDate,
+      accountId: initialAccount,
+      categoryId: getFirstCategory(initialType),
+      amount: '',
+      notes: '',
+    }));
+
+    setBulkRows(initialRows);
+    setIsBulkModalOpen(true);
+  };
+
+  const closeBulkModal = () => {
+    setIsBulkModalOpen(false);
+    setBulkRows([]);
+  };
+
+  const addBulkRow = () => {
+    const getFirstCategory = (t: TransactionType) => {
+      const match = categories?.find((c) => c.type === t);
+      return match ? match.id : '';
+    };
+
+    setBulkRows((prev) => [
+      ...prev,
+      {
+        id: `row-${Date.now()}-${Math.random()}`,
+        type: defaultType,
+        date: defaultDate,
+        accountId: defaultAccountId || (accounts && accounts.length > 0 ? accounts[0].id : ''),
+        categoryId: getFirstCategory(defaultType),
+        amount: '',
+        notes: '',
+      },
+    ]);
+  };
+
+  const copyBulkRow = (index: number) => {
+    const source = bulkRows[index];
+    if (!source) return;
+    const newRow = {
+      ...source,
+      id: `row-${Date.now()}-${Math.random()}`,
+    };
+    const updated = [...bulkRows];
+    updated.splice(index + 1, 0, newRow);
+    setBulkRows(updated);
+  };
+
+  const removeBulkRow = (index: number) => {
+    if (bulkRows.length <= 1) return;
+    setBulkRows((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const updateBulkRow = (index: number, field: string, value: string) => {
+    setBulkRows((prev) => {
+      const updated = [...prev];
+      const row = { ...updated[index] };
+
+      if (field === 'type') {
+        const newType = value as TransactionType;
+        row.type = newType;
+        const catMatch = categories?.find((c) => c.id === row.categoryId);
+        if (!catMatch || catMatch.type !== newType) {
+          const firstCat = categories?.find((c) => c.type === newType);
+          row.categoryId = firstCat ? firstCat.id : '';
+        }
+      } else {
+        (row as any)[field] = value;
+      }
+
+      updated[index] = row;
+      return updated;
+    });
+  };
+
+  const applyDefaultsToAll = () => {
+    setBulkRows((prev) =>
+      prev.map((row) => {
+        const newType = defaultType;
+        let newCat = row.categoryId;
+        const catMatch = categories?.find((c) => c.id === newCat);
+        if (!catMatch || catMatch.type !== newType) {
+          const firstCat = categories?.find((c) => c.type === newType);
+          newCat = firstCat ? firstCat.id : '';
+        }
+        return {
+          ...row,
+          date: defaultDate || row.date,
+          accountId: defaultAccountId || row.accountId,
+          type: newType,
+          categoryId: newCat,
+        };
+      })
+    );
+  };
+
+  const handleBulkSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const validRows = bulkRows.filter(
+      (r) => r.accountId && r.categoryId && parseFloat(r.amount) > 0 && r.date
+    );
+
+    if (validRows.length === 0) {
+      alert('Please fill out at least one valid transaction row with an amount greater than 0.');
+      return;
+    }
+
+    const payloads: TransactionPayload[] = validRows.map((r) => ({
+      accountId: r.accountId,
+      categoryId: r.categoryId,
+      amount: parseFloat(r.amount),
+      type: r.type,
+      date: r.date,
+      notes: r.notes || undefined,
+    }));
+
+    bulkCreateMutation.mutate(payloads);
+  };
+
+  const totalBulkExpense = bulkRows
+    .filter((r) => r.type === 'EXPENSE' && !isNaN(parseFloat(r.amount)))
+    .reduce((sum, r) => sum + parseFloat(r.amount), 0);
+
+  const totalBulkIncome = bulkRows
+    .filter((r) => r.type === 'INCOME' && !isNaN(parseFloat(r.amount)))
+    .reduce((sum, r) => sum + parseFloat(r.amount), 0);
+
 
   const openCreateModal = () => {
     setEditingTransaction(null);
@@ -206,12 +382,20 @@ export const Transactions: React.FC = () => {
             <span>Export CSV</span>
           </button>
           <button
+            onClick={openBulkModal}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-700 font-semibold text-xs hover:bg-indigo-100 shadow-sm transition-all"
+          >
+            <Layers className="w-4 h-4 text-indigo-600" />
+            <span>Multi-Entry</span>
+          </button>
+          <button
             onClick={openCreateModal}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white font-semibold text-xs hover:bg-indigo-700 shadow-md shadow-indigo-600/20 transition-all"
           >
             <Plus className="w-4 h-4" />
             <span>New Transaction</span>
           </button>
+
         </div>
       </div>
 
@@ -663,6 +847,262 @@ export const Transactions: React.FC = () => {
           </div>
         </form>
       </Modal>
+
+      {/* Multi-Entry Transaction Modal */}
+      <Modal
+        isOpen={isBulkModalOpen}
+        onClose={closeBulkModal}
+        title="Multi-Entry Transaction Batch"
+        maxWidth="max-w-5xl"
+      >
+        <form onSubmit={handleBulkSubmit} className="space-y-4">
+          {/* Header Controls for Batch Defaults */}
+          <div className="p-4 bg-slate-50/90 rounded-2xl border border-slate-200/80 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                <Filter className="w-3.5 h-3.5 text-indigo-600" />
+                Row Defaults & Batch Controls
+              </span>
+              <button
+                type="button"
+                onClick={applyDefaultsToAll}
+                className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 hover:underline inline-flex items-center gap-1"
+              >
+                <RotateCcw className="w-3 h-3" />
+                Apply Defaults to All Rows
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
+                  Default Date
+                </label>
+                <input
+                  type="date"
+                  value={defaultDate}
+                  onChange={(e) => setDefaultDate(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
+                  Default Account
+                </label>
+                <select
+                  value={defaultAccountId}
+                  onChange={(e) => setDefaultAccountId(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white"
+                >
+                  {accounts?.map((acc) => (
+                    <option key={acc.id} value={acc.id}>
+                      {acc.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
+                  Default Type
+                </label>
+                <select
+                  value={defaultType}
+                  onChange={(e) => setDefaultType(e.target.value as TransactionType)}
+                  className="w-full px-3 py-1.5 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white"
+                >
+                  <option value="EXPENSE">Expense</option>
+                  <option value="INCOME">Income</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Live Summary Metrics */}
+          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 bg-indigo-50/60 rounded-xl border border-indigo-100 text-xs font-semibold text-slate-700">
+            <div className="flex items-center gap-4">
+              <span>
+                Total Rows: <strong className="text-slate-900">{bulkRows.length}</strong>
+              </span>
+              <span>
+                Expenses Sum:{' '}
+                <strong className="text-rose-600">
+                  -{currency}
+                  {totalBulkExpense.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </strong>
+              </span>
+              <span>
+                Income Sum:{' '}
+                <strong className="text-emerald-600">
+                  +{currency}
+                  {totalBulkIncome.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </strong>
+              </span>
+            </div>
+            <div className="text-indigo-900 font-bold">
+              Net Impact:{' '}
+              <span className={totalBulkIncome - totalBulkExpense >= 0 ? 'text-emerald-600' : 'text-rose-600'}>
+                {totalBulkIncome - totalBulkExpense >= 0 ? '+' : ''}
+                {currency}
+                {(totalBulkIncome - totalBulkExpense).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+          </div>
+
+          {/* Multi-Entry Table */}
+          <div className="max-h-96 overflow-y-auto border border-slate-200 rounded-2xl shadow-sm bg-white">
+            <table className="w-full text-left border-collapse">
+              <thead className="sticky top-0 bg-slate-100 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase">
+                <tr>
+                  <th className="py-2.5 px-3 w-10 text-center">#</th>
+                  <th className="py-2.5 px-3 w-28">Type</th>
+                  <th className="py-2.5 px-3 w-36">Date</th>
+                  <th className="py-2.5 px-3 w-40">Account</th>
+                  <th className="py-2.5 px-3 w-44">Category</th>
+                  <th className="py-2.5 px-3 w-32">Amount ({currency})</th>
+                  <th className="py-2.5 px-3">Notes</th>
+                  <th className="py-2.5 px-3 w-20 text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-xs">
+                {bulkRows.map((row, index) => {
+                  const availableCategories = categories?.filter((c) => c.type === row.type) || [];
+                  return (
+                    <tr key={row.id} className="hover:bg-slate-50/70 transition-colors">
+                      <td className="py-2 px-3 text-center text-slate-400 font-bold">{index + 1}</td>
+                      <td className="py-2 px-3">
+                        <select
+                          value={row.type}
+                          onChange={(e) => updateBulkRow(index, 'type', e.target.value)}
+                          className={`w-full p-1.5 rounded-lg border text-xs font-semibold focus:outline-none ${
+                            row.type === 'EXPENSE'
+                              ? 'bg-rose-50/70 border-rose-200 text-rose-700'
+                              : 'bg-emerald-50/70 border-emerald-200 text-emerald-700'
+                          }`}
+                        >
+                          <option value="EXPENSE">Expense</option>
+                          <option value="INCOME">Income</option>
+                        </select>
+                      </td>
+                      <td className="py-2 px-3">
+                        <input
+                          type="date"
+                          required
+                          value={row.date}
+                          onChange={(e) => updateBulkRow(index, 'date', e.target.value)}
+                          className="w-full p-1.5 rounded-lg border border-slate-200 text-xs focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                        />
+                      </td>
+                      <td className="py-2 px-3">
+                        <select
+                          required
+                          value={row.accountId}
+                          onChange={(e) => updateBulkRow(index, 'accountId', e.target.value)}
+                          className="w-full p-1.5 rounded-lg border border-slate-200 text-xs focus:ring-1 focus:ring-indigo-500 focus:outline-none bg-white"
+                        >
+                          {accounts?.map((acc) => (
+                            <option key={acc.id} value={acc.id}>
+                              {acc.name}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="py-2 px-3">
+                        <select
+                          required
+                          value={row.categoryId}
+                          onChange={(e) => updateBulkRow(index, 'categoryId', e.target.value)}
+                          className="w-full p-1.5 rounded-lg border border-slate-200 text-xs focus:ring-1 focus:ring-indigo-500 focus:outline-none bg-white"
+                        >
+                          {availableCategories.map((cat) => (
+                            <option key={cat.id} value={cat.id}>
+                              {cat.name}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="py-2 px-3">
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0.01"
+                          required
+                          placeholder="0.00"
+                          value={row.amount}
+                          onChange={(e) => updateBulkRow(index, 'amount', e.target.value)}
+                          className="w-full p-1.5 rounded-lg border border-slate-200 text-xs focus:ring-1 focus:ring-indigo-500 focus:outline-none font-semibold text-slate-800"
+                        />
+                      </td>
+                      <td className="py-2 px-3">
+                        <input
+                          type="text"
+                          placeholder="Notes..."
+                          value={row.notes}
+                          onChange={(e) => updateBulkRow(index, 'notes', e.target.value)}
+                          className="w-full p-1.5 rounded-lg border border-slate-200 text-xs focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                        />
+                      </td>
+                      <td className="py-2 px-3 text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => copyBulkRow(index)}
+                            className="p-1 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
+                            title="Duplicate Row"
+                          >
+                            <Copy className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={bulkRows.length <= 1}
+                            onClick={() => removeBulkRow(index)}
+                            className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 disabled:opacity-30 disabled:pointer-events-none"
+                            title="Remove Row"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Action Footer */}
+          <div className="flex items-center justify-between pt-2">
+            <button
+              type="button"
+              onClick={addBulkRow}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-all"
+            >
+              <Plus className="w-4 h-4 text-slate-600" />
+              <span>Add Another Row</span>
+            </button>
+
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={closeBulkModal}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={bulkCreateMutation.isPending}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 disabled:opacity-50 shadow-md shadow-indigo-600/20"
+              >
+                {bulkCreateMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+                <span>Save {bulkRows.length} Transactions</span>
+              </button>
+            </div>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };
+

@@ -19,6 +19,11 @@ export const transactionApi = {
     return data;
   },
 
+  createBulkTransactions: async (payloads: TransactionPayload[]): Promise<Transaction[]> => {
+    const { data } = await apiClient.post<Transaction[]>('/transactions/bulk', { transactions: payloads });
+    return data;
+  },
+
   updateTransaction: async (id: string, payload: TransactionPayload): Promise<Transaction> => {
     const { data } = await apiClient.put<Transaction>(`/transactions/${id}`, payload);
     return data;

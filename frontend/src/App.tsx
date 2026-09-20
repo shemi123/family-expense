@@ -11,6 +11,7 @@ import { Transactions } from './pages/Transactions';
 import { Budgets } from './pages/Budgets';
 import { Recurring } from './pages/Recurring';
 import { Family } from './pages/Family';
+import { ExpenseCalculation } from './pages/ExpenseCalculation';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -73,9 +74,11 @@ export const App: React.FC = () => {
             <Route path="/accounts" element={<Accounts />} />
             <Route path="/transactions" element={<Transactions />} />
             <Route path="/budgets" element={<Budgets />} />
+            <Route path="/expense-calculation" element={<ExpenseCalculation />} />
             <Route path="/recurring" element={<Recurring />} />
             <Route path="/family" element={<Family />} />
           </Route>
+
 
           {/* Catch-all redirect */}
           <Route path="*" element={<Navigate to="/" replace />} />
